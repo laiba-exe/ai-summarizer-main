@@ -1,5 +1,4 @@
-import React, { useState, useEffect } from "react";
-
+import React, { useState, useEffect, useMemo } from "react";
 import { copy, linkIcon, loader, tick } from "../assets";
 import { useLazyGetSummaryQuery } from "../services/article";
 
@@ -8,7 +7,7 @@ const Demo = () => {
     url: "",
     summary: "",
   });
-  
+
   const [allArticles, setAllArticles] = useState([]);
   const [copied, setCopied] = useState("");
 
@@ -29,29 +28,42 @@ const Demo = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    const urlRegex = /^(https?|chrome):\/\/[^\s$.?#].[^\s]*$/gm;
+    if (!urlRegex.test(article.url)) {
+      return alert("Please enter a valid URL.");
+    }
+
     const existingArticle = allArticles.find(
       (item) => item.url === article.url
     );
 
     if (existingArticle) return setArticle(existingArticle);
 
-    const { data } = await getSummary({ articleUrl: article.url });
-    if (data?.summary) {
-      const newArticle = { ...article, summary: data.summary };
-      const updatedAllArticles = [newArticle, ...allArticles];
+    try {
+      const { data } = await getSummary({ articleUrl: article.url });
+      if (data?.summary) {
+        const newArticle = { ...article, summary: data.summary };
+        const updatedAllArticles = [newArticle, ...allArticles];
 
-      // update state and local storage
-      setArticle(newArticle);
-      setAllArticles(updatedAllArticles);
-      localStorage.setItem("articles", JSON.stringify(updatedAllArticles));
+        // update state and local storage
+        setArticle(newArticle);
+        setAllArticles(updatedAllArticles);
+        localStorage.setItem("articles", JSON.stringify(updatedAllArticles));
+      }
+    } catch (err) {
+      console.error("Failed to fetch summary:", err);
     }
   };
 
-  // copy the url and toggle the icon for user feedback
+  // copy the URL and toggle the icon for user feedback
   const handleCopy = (copyUrl) => {
-    setCopied(copyUrl);
-    navigator.clipboard.writeText(copyUrl);
-    setTimeout(() => setCopied(false), 3000);
+    try {
+      setCopied(copyUrl);
+      navigator.clipboard.writeText(copyUrl);
+      setTimeout(() => setCopied(false), 3000);
+    } catch (err) {
+      console.error("Failed to copy:", err);
+    }
   };
 
   const handleKeyDown = (e) => {
@@ -59,6 +71,9 @@ const Demo = () => {
       handleSubmit(e);
     }
   };
+
+  // Memoize reversed articles array to avoid recalculating on every render
+  const reversedArticles = useMemo(() => [...allArticles].reverse(), [allArticles]);
 
   return (
     <section className='mt-16 w-full max-w-xl'>
@@ -81,7 +96,7 @@ const Demo = () => {
             onChange={(e) => setArticle({ ...article, url: e.target.value })}
             onKeyDown={handleKeyDown}
             required
-            className='url_input peer' // When you need to style an element based on the state of a sibling element, mark the sibling with the peer class, and use peer-* modifiers to style the target element
+            className='url_input peer' // Use Tailwind CSS peer modifier to style based on sibling state
           />
           <button
             type='submit'
@@ -93,9 +108,9 @@ const Demo = () => {
 
         {/* Browse History */}
         <div className='flex flex-col gap-1 max-h-60 overflow-y-auto'>
-          {allArticles.reverse().map((item, index) => (
+          {reversedArticles.map((item, index) => (
             <div
-              key={`link-${index}`}
+              key={link-${index}}
               onClick={() => setArticle(item)}
               className='link_card'
             >
@@ -116,34 +131,33 @@ const Demo = () => {
 
       {/* Display Result */}
       <div className='my-10 max-w-full flex justify-center items-center'>
-  {isFetching ? (
-    <img src={loader} alt='loader' className='w-20 h-20 object-contain' />
-  ) : error ? (
-    <p className='font-inter font-bold text-black text-center'>
-      Well, that wasn't supposed to happen...
-      <br />
-      <span className='font-satoshi font-normal text-gray-700'>
-        {error?.data?.error}
-      </span>
-    </p>
-  ) : (
-    article && article.summary && ( // Check if article and article.summary exist
-      <div className='flex flex-col gap-3'>
-        <h2 className='font-satoshi font-bold text-gray-600 text-xl'>
-          Article <span className='blue_gradient'>Summary</span>
-        </h2>
-        <div className='summary_box'>
-          <p className='font-inter font-medium text-sm text-gray-700'>
-            {article.summary}
+        {isFetching ? (
+          <img src={loader} alt='loader' className='w-20 h-20 object-contain' />
+        ) : error ? (
+          <p className='font-inter font-bold text-black text-center'>
+            Well, that wasn't supposed to happen...
+            <br />
+            <span className='font-satoshi font-normal text-gray-700'>
+              {error?.data?.error || "An unexpected error occurred."}
+            </span>
           </p>
-        </div>
+        ) : (
+          article && article.summary && (
+            <div className='flex flex-col gap-3'>
+              <h2 className='font-satoshi font-bold text-gray-600 text-xl'>
+                Article <span className='blue_gradient'>Summary</span>
+              </h2>
+              <div className='summary_box'>
+                <p className='font-inter font-medium text-sm text-gray-700'>
+                  {article.summary}
+                </p>
+              </div>
+            </div>
+          )
+        )}
       </div>
-    )
-  )}
-</div>
-
     </section>
   );
 };
 
-export default Demo;
+export default Demo;
